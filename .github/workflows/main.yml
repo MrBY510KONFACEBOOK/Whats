@@ -1,0 +1,50 @@
+name: pcon
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Run every day at midnight UTC
+  push:
+    branches:
+      - main  # Trigger on pushes to the main branch
+  workflow_dispatch:  # Trigger manually
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Enable Terminal Services
+        run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+
+      - name: Enable Firewall for Remote Desktop
+        run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Enable User Authentication
+        run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+
+      - name: Set Password for runneradmin
+        run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+
+      - name: Clone Repository
+        run: git clone https://github.com/MrBY510KONFACEBOOK/watchpro.git
+
+      - name: Change Directory to watchpro and List Files
+        run: |
+          cd watchpro
+          Write-Output "Files in the watchpro directory:"
+          Get-ChildItem
+
+      - name: Install Playit
+        run: |
+          $msiPath = "watchpro\playit-windows-x86_64-signed.msi"
+          Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/quiet", "/norestart" -NoNewWindow -Wait
+
+      - name: Install Python
+        run: choco install -y python
+
+      - name: Start HTTP Server
+        run: |
+          $installPath = "C:\Program Files\Playit"
+          cd $installPath
+          Start-Process powershell -ArgumentList "python -m http.server 8080" -NoNewWindow
+
+      - name: Expose HTTP Server via localhost.run
+        run: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -R 80:localhost:8080 nokey@localhost.run
